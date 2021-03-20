@@ -1,0 +1,221 @@
+<html>
+      <title>E-glove</title>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/p5.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/addons/p5.dom.min.js"></script>
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- OK, YOU CAN MAKE CHANGES BELOW THIS LINE AGAIN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/0.7.2/addons/p5.dom.min.js"></script>
+  <!-- This line removes any default padding and style.
+       You might only need one of these values set. -->
+    <style>
+body,h1,h2,h3,h4,h5,h6 {font-family: "Raleway", sans-serif}
+
+body, html {
+  height: 100%;
+  line-height: 1.8;
+}
+
+
+
+.w3-bar .w3-button {
+  padding: 16px;
+}
+    canvas {
+  display: block;
+        position: absolute;
+}
+    
+ </style>
+    <body>
+
+
+<script>
+  var deviceName = 'E-glove'
+  var bleService = '783b26f8-740d-4187-9603-82281d6d7e4f'
+  var bleCharacteristic = '1bfd9f18-ae1f-4bba-9fe9-0df611340195'
+  var bleCharacteristicWrite = 'bb99a060-6fa8-4bba-9ef0-731634e96e88'
+  var bluetoothDeviceDetected
+  var gattCharacteristic
+  let receivedValue = "";
+  let splitString;
+  let isConnected = false;
+  var MessageReceived = "";
+  let input, button, greeting;
+    
+   
+
+function setup() {
+
+  createCanvas(windowWidth, windowHeight);
+    
+  console.log("setting up");
+
+  //Create command buttons
+  
+  //Connection
+  const connectButton = createButton('Connetti');
+  connectButton.mousePressed(read);
+  connectButton.position(575, 100);
+  //Start notifications 
+  let StartButton = createButton('Start');
+  StartButton.mousePressed(start);
+  StartButton.position(660, 100);
+  //Stop notification  
+  let StopButton = createButton('Stop');
+  StopButton.mousePressed(stop);
+  StopButton.position(718, 100);
+  //Create input space
+  input = createInput();
+  input.position(600, 250);
+  button = createButton('Invia');
+  button.position(input.x + input.width, 250);
+  button.mousePressed(writeButton);
+   
+  
+}
+
+
+function draw() {
+fill (0);  
+  textSize(18);
+  background(255);
+  
+  //Graphically visualize connection with the device
+  if (isConnected) {
+    //background(0, 255, 0);
+    fill(0,255,0);
+    text('Connesso :)', 880, 100);
+  } else {
+    //background(255, 0, 0);
+    fill(255,0,0);
+    textAlign(LEFT, TOP);
+    text('Disconnesso :/', 880, 100);
+  }
+  fill(0);
+  
+  //Sets and updates the text values for the labels and data.
+  text("Messaggio ricevuto:", 575, 150);
+  text( MessageReceived, 575, 180);
+    
+  text("Che messaggio vorresti inviare?", 575, 210);
+  
+}   
+    
+
+
+  function isWebBluetoothEnabled() {
+    if (!navigator.bluetooth) {
+      console.log('Web Bluetooth API is not available in this browser!')
+      return false
+    }
+
+    return true
+  }
+
+  function getDeviceInfo() {
+    let options = {
+      optionalServices: [bleService],
+      filters: [
+        { "name": deviceName }
+      ]
+    }
+
+    console.log('Requesting any Bluetooth Device...')
+    return navigator.bluetooth.requestDevice(options).then(device => {
+      bluetoothDeviceDetected = device
+    }).catch(error => {
+      console.log('Argh! ' + error)
+    })
+  }
+
+  function read() {
+    return (bluetoothDeviceDetected ? Promise.resolve() : getDeviceInfo())
+    .then(connectGATT)
+    .then(_ => {
+      console.log('Valutando la forza misurata...')
+      return gattCharacteristic.readValue()
+    })
+    .catch(error => {
+      console.log('Waiting to start reading: ' + error)
+    })
+  }
+
+  function connectGATT() {
+    if (bluetoothDeviceDetected.gatt.connected && gattCharacteristic) {
+      return Promise.resolve()
+    }
+
+    return bluetoothDeviceDetected.gatt.connect()
+    .then(server => {
+      console.log('Getting GATT Service...')
+      return server.getPrimaryService(bleService)
+    })
+    .then(service => {
+      console.log('Getting GATT Characteristic...')
+      return service.getCharacteristic(bleCharacteristic)
+    })
+    .then(characteristic => {
+      gattCharacteristic = characteristic
+      gattCharacteristic.addEventListener('characteristicvaluechanged',
+          handleChangedValue)
+//        var value=event.target.value.getUint16(0);
+//        $("#Notified Value").text(""+value);
+      isConnected = true;
+        
+    })
+      
+  }
+
+  function handleChangedValue(event) {
+    let decoder = new TextDecoder('utf-8');
+    let value = event.target.value
+    var now = new Date()
+    console.log('> ' + now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds() + ' Received message is: ' + decoder.decode(value) )
+    receivedValue=decoder.decode(value);
+    MessageReceived = receivedValue;
+    isConnected = true;
+      
+  }
+
+  function start() {
+    gattCharacteristic.startNotifications()
+    .then(_ => {
+      console.log('Start reading...')
+    })
+    .catch(error => {
+      console.log('[ERROR] Start: ' + error)
+    })
+  }
+
+  function stop() {
+    gattCharacteristic.stopNotifications()
+    .then(_ => {
+      console.log('Stop reading...')
+    })
+    .catch(error => {
+      console.log('[ERROR] Stop: ' + error)
+    })
+  }
+    
+//Define the operation to send the message to the ESP32
+    function writeButton() {
+  const name = input.value();
+  let encoder = new TextEncoder('utf-8');
+  log('Setting Characteristic User Description...');
+  gattCharacteristic.writeValue(encoder.encode(name))
+  .then(_ => {
+    log('> Characteristic User Description changed to: ' + name);
+  })
+  .catch(error => {
+    log('Argh! ' + error);
+  });
+        
+        
+}
+    </script>
+</body>
+</html>
